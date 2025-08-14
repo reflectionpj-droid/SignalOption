@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Real-time Analytics</title>
+  <style>
+    :root{ --bg:#0b1020;--card:#121933cc;--accent:#6ee7ff;--accent2:#a78bfa;--ok:#10b981;--bad:#ef4444;--muted:#9aa3b2;--grid:#1e2749; }
+    *{box-sizing:border-box; -webkit-tap-highlight-color: transparent}
+    html{height:100%; font-size:16px}
+    body{ min-height:100%; margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial; color:#e6e9ef;
+      background: radial-gradient(1000px 600px at 10% -10%, #1b2455, transparent),
+                  radial-gradient(900px 600px at 110% 20%, #1b3a5a, transparent),
+                  linear-gradient(180deg,#0b1020,#0a0f1d 60%);} 
+    /* iOS/Telegram WebView: remove native look so <select> works reliably */
+    select,button,input,textarea{-webkit-appearance:none;appearance:none;background-color:#0d1328}
+    .container{max-width:980px;margin:40px auto;padding:0 20px}
+    .card{background:var(--card);backdrop-filter:blur(8px);border:1px solid #2a3357;border-radius:20px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+    h1{font-size:clamp(20px,5vw,34px);margin:0}
+    .lang-select{min-width:220px}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+    .field{grid-column:span 12}
+    @media (min-width:800px){.field.sm-6{grid-column:span 6}.field.sm-4{grid-column:span 4}.field.sm-3{grid-column:span 3}}
+    label{display:block;font-size:14px;color:#c6cce0;margin:0 0 8px}
+    select,button{width:100%;padding:14px 16px;border-radius:12px;border:1px solid #2d365f;color:#e6e9ef;font-size:16px;min-height:48px}
+    select:focus,button:focus{outline:2px solid #2aa9ff33}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .btn{cursor:pointer;transition:.18s transform ease,.18s background-color ease;font-weight:600}
+    .btn:hover{transform:translateY(-1px)}.btn:active{transform:none}.btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;color:#04121a}
+    .btn-outline{background:transparent}
+    .result{margin-top:20px;padding:18px;border-radius:16px;border:1px solid #33406d;background:#0e152f}
+    .badge{display:inline-flex;align-items:center;gap:8px;font-weight:800;padding:8px 14px;border-radius:999px;letter-spacing:.3px}
+    .buy{background:#0e2e1f;color:#7ef2b3;border:1px solid #1d5e41;box-shadow:0 0 0 rgba(16,185,129,.0);animation:glowUp 1.6s ease-in-out infinite}
+    .sell{background:#2e1313;color:#ff9ea1;border:1px solid #6e2326;box-shadow:0 0 0 rgba(239,68,68,.0);animation:glowDown 1.6s ease-in-out infinite}
+    @keyframes glowUp{0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.0)}50%{box-shadow:0 0 30px 4px rgba(16,185,129,.35)}}
+    @keyframes glowDown{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.0)}50%{box-shadow:0 0 30px 4px rgba(239,68,68,.35)}}
+    .meta{color:#a9b0c3;font-size:14px}
+    .just{margin:12px 0 0;line-height:1.55}
+    /* CHART */
+    .chart-wrap{margin-top:16px}
+    .chart{position:relative;height:220px;border:1px solid #2a3357;border-radius:14px;background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.0)),repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(255,255,255,.05) 28px, rgba(255,255,255,.05) 29px),#0b122a;overflow:hidden}
+    .chart canvas{position:absolute;inset:0;width:100%;height:100%}
+    .trend-label{position:absolute;inset:auto 12px 12px auto;padding:6px 10px;font-size:12px;border-radius:999px;background:#0d1328;border:1px solid #2a3357;color:#c8d0e5;opacity:.9}
+    @media (max-width:600px){.container{margin:16px auto;padding:0 12px}.card{padding:16px;border-radius:16px}.grid{gap:12px}.sticky-actions{position:sticky;bottom:0;left:0;right:0;padding:12px;margin-top:8px;border-top:1px solid #2a3357;background:linear-gradient(180deg, rgba(13,19,40,0.0), rgba(13,19,40,0.35) 10%, rgba(13,19,40,0.85));backdrop-filter:blur(6px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 12px);border-bottom-left-radius:12px;border-bottom-right-radius:12px}.mobile-stack>*{flex:1 1 100%}.lang-select{min-width:unset;width:100%}.topbar{flex-direction:column;align-items:flex-start}}
+    @media (prefers-reduced-motion:reduce){.btn{transition:none}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="topbar">
+        <h1 id="title">Real-time Analytics</h1>
+        <select id="lang" class="lang-select" aria-label="Language">
+          <option value="en">🇺🇸 English</option>
+          <option value="ru">🇷🇺 Русский</option>
+          <option value="es">🇪🇸 Español</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="ar">🇸🇦 العربية</option>
+        </select>
+      </div>
+
+      <div class="grid" id="controls">
+        <div class="field sm-4">
+          <label for="broker" id="lbl-broker">Broker</label>
+          <select id="broker"></select>
+        </div>
+        <div class="field sm-4">
+          <label for="pair" id="lbl-pair">Currency Pair (OTC)</label>
+          <select id="pair"></select>
+        </div>
+        <div class="field sm-4">
+          <label for="tf" id="lbl-tf">Timeframe</label>
+          <select id="tf"></select>
+        </div>
+        <div class="field sm-3">
+          <label for="indicator" id="lbl-ind">Indicator for Rationale</label>
+          <select id="indicator"></select>
+        </div>
+        <div class="field sm-6" style="align-self:end">
+          <div class="row sticky-actions mobile-stack">
+            <button id="start" class="btn btn-primary">Start</button>
+            <button id="again" class="btn btn-outline" disabled>Get new signal</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="out"></div>
+
+      <div class="chart-wrap">
+        <div class="chart" id="chart">
+          <canvas id="c"></canvas>
+          <div class="trend-label" id="trendLabel">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Enable touch handling in iOS/Telegram WebView (select fix)
+    document.addEventListener('touchstart', function(){}, {passive:true});
+
+    // --------- I18N ---------
+    const I18N = {
+      en: { flag:'🇺🇸', name:'English', locale:'en-US', dir:'ltr', title:'Real-time Analytics', labels:{broker:'Broker', pair:'Currency Pair (OTC)', tf:'Timeframe', ind:'Indicator for Rationale'}, buttons:{start:'Start', again:'Get new signal'}, indNames:{AUTO:'Auto (random)', MACD:'MACD', STOCH:'Stochastic', RSI:'RSI', WILL:'Williams %R', BBAN:'Bollinger Bands'}, result:{buy:'BUY', sell:'SELL', indicator:'Indicator', reason:'Rationale', nextIn:'Next update in', ready:'Ready'}, ph:{ bull:'bullish', bear:'bearish', high:'local high', low:'local low', sto:{overb:'overbought', overs:'oversold', mid:'mid-range', cross:'signal cross', div:'divergence vs price', exit:'exit from zone'}, rsi:{overb:'overbought', overs:'oversold', bal:'balance', r50:'bounce from 50', hdiv:'hidden divergence', brk:'break of local level'}, will:{overb:'overbought', overs:'oversold', neutral:'neutral zone', exit:'exit from extreme zone', post:'signal after consolidation', ret:'retest of level'}, bban:{upper:'upper', middle:'middle', lower:'lower', squeeze:'squeeze → possible impulse', bounce:'bounce from band', break:'breakout and hold'} } },
+      ru: { flag:'🇷🇺', name:'Русский', locale:'ru-RU', dir:'ltr', title:'Аналитика в реальном времени', labels:{broker:'Брокер', pair:'Валютная пара (OTC)', tf:'Таймфрейм', ind:'Индикатор для обоснования'}, buttons:{start:'Старт', again:'Получить новый сигнал'}, indNames:{AUTO:'Автовыбор (случайный)', MACD:'MACD', STOCH:'Стохастик', RSI:'RSI', WILL:'Williams %R', BBAN:'Полосы Боллинджера'}, result:{buy:'BUY / Покупка', sell:'SELL / Продажа', indicator:'Индикатор', reason:'Обоснование', nextIn:'Обновление через', ready:'Готово'}, ph:{ bull:'бычьим', bear:'медвежьим', high:'максимуме', low:'минимуме', sto:{overb:'перекупленности', overs:'перепроданности', mid:'середине диапазона', cross:'сигнальный кросс', div:'расхождение с ценой', exit:'выход из зоны'}, rsi:{overb:'перекупленность', overs:'перепроданность', bal:'баланс', r50:'отбой от уровня 50', hdiv:'скрытая дивергенция', brk:'пробой локального уровня'}, will:{overb:'перекупленность', overs:'перепроданность', neutral:'нейтральная зона', exit:'выход из экстремальной зоны', post:'сигнал после консолидации', ret:'ретест уровня'}, bban:{upper:'верхней', middle:'средней', lower:'нижней', squeeze:'сжатие → возможен импульс', bounce:'отбой от границы', break:'пробой и закрепление'} } },
+      es: { flag:'🇪🇸', name:'Español', locale:'es-ES', dir:'ltr', title:'Analítica en tiempo real', labels:{broker:'Bróker', pair:'Par de divisas (OTC)', tf:'Temporalidad', ind:'Indicador para la justificación'}, buttons:{start:'Iniciar', again:'Nueva señal'}, indNames:{AUTO:'Auto (aleatorio)', MACD:'MACD', STOCH:'Estocástico', RSI:'RSI', WILL:'Williams %R', BBAN:'Bandas de Bollinger'}, result:{buy:'COMPRA', sell:'VENTA', indicator:'Indicador', reason:'Justificación', nextIn:'Siguiente en', ready:'Listo'}, ph:{ bull:'alcista', bear:'bajista', high:'máximo local', low:'mínimo local', sto:{overb:'sobrecompra', overs:'sobreventa', mid:'zona media', cross:'cruce de señal', div:'divergencia con el precio', exit:'salida de la zona'}, rsi:{overb:'sobrecompra', overs:'sobreventa', bal:'equilibrio', r50:'rebote desde 50', hdiv:'divergencia oculta', brk:'ruptura del nivel local'}, will:{overb:'sobrecompra', overs:'sobreventa', neutral:'zona neutral', exit:'salida de zona extrema', post:'señal tras consolidación', ret:'retest del nivel'}, bban:{upper:'banda superior', middle:'banda media', lower:'banda inferior', squeeze:'compresión → posible impulso', bounce:'rebote en la banda', break:'ruptura y consolidación'} } },
+      fr: { flag:'🇫🇷', name:'Français', locale:'fr-FR', dir:'ltr', title:'Analyse en temps réel', labels:{broker:'Courtier', pair:'Paire de devises (OTC)', tf:'Unité de temps', ind:'Indicateur pour la justification'}, buttons:{start:'Démarrer', again:'Nouveau signal'}, indNames:{AUTO:'Auto (aléatoire)', MACD:'MACD', STOCH:'Stochastique', RSI:'RSI', WILL:'Williams %R', BBAN:'Bandes de Bollinger'}, result:{buy:'ACHAT', sell:'VENTE', indicator:'Indicateur', reason:'Justification', nextIn:'Prochaine mise à jour dans', ready:'Prêt'}, ph:{ bull:'haussier', bear:'baissier', high:'sommet local', low:'creux local', sto:{overb:'surachat', overs:'survente', mid:'zone médiane', cross:'croisement de signal', div:'divergence vs prix', exit:'sortie de zone'}, rsi:{overb:'surachat', overs:'survente', bal:'équilibre', r50:'rebond sur 50', hdiv:'divergence cachée', brk:'cassure du niveau local'}, will:{overb:'surachat', overs:'survente', neutral:'zone neutre', exit:'sortie de la zone extrême', post:'signal après consolidation', ret:'retest du niveau'}, bban:{upper:'bande supérieure', middle:'bande médiane', lower:'bande inférieure', squeeze:'resserrement → impulsion possible', bounce:'rebond sur la bande', break:'cassure et consolidation'} } },
+      ar: { flag:'🇸🇦', name:'العربية', locale:'ar-EG', dir:'rtl', title:'تحليلات فورية', labels:{broker:'الوسيط', pair:'زوج العملات (OTC)', tf:'الإطار الزمني', ind:'المؤشر للتبرير'}, buttons:{start:'بدء', again:'إشارة جديدة'}, indNames:{AUTO:'تلقائي (عشوائي)', MACD:'MACD', STOCH:'ستوكاستيك', RSI:'RSI', WILL:'Williams %R', BBAN:'بولنجر باندز'}, result:{buy:'شراء', sell:'بيع', indicator:'المؤشر', reason:'التبرير', nextIn:'التحديث التالي خلال', ready:'جاهز'}, ph:{ bull:'تقاطع صاعد', bear:'تقاطع هابط', high:'قمة محلية', low:'قاع محلي', sto:{overb:'تشبع شرائي', overs:'تشبع بيعي', mid:'منطقة متوسطة', cross:'تقاطع إشارة', div:'انحراف مع السعر', exit:'خروج من المنطقة'}, rsi:{overb:'تشبع شرائي', overs:'تشبع بيعي', bal:'توازن', r50:'ارتداد من 50', hdiv:'انحراف مخفي', brk:'اختراق مستوى محلي'}, will:{overb:'تشبع شرائي', overs:'تشبع بيعي', neutral:'منطقة حيادية', exit:'خروج من منطقة متطرفة', post:'إشارة بعد تجميع', ret:'إعادة اختبار المستوى'}, bban:{upper:'الحافة العليا', middle:'الوسطى', lower:'السفلى', squeeze:'انضغاط → احتمال حركة قوية', bounce:'ارتداد من الحد', break:'اختراق وتأكيد'} } },
+    };
+
+    // --------- Brokers data ---------
+    const BROKERS = {
+      'Pocket Option': { pairs:['EUR/USD','GBP/USD','USD/JPY','USD/CHF','AUD/USD','BTC/USD'], tfs:['15s','30s','1m','2m','5m'] },
+      'IQ Option':     { pairs:['EUR/USD','GBP/USD','AUD/CAD','USD/CHF','EUR/JPY','GBP/JPY'], tfs:['30s','1m','5m','15m'] },
+      'Binomo':        { pairs:['EUR/USD','USD/JPY','GBP/USD','USD/CAD','EUR/GBP'],          tfs:['1m','5m','15m'] },
+      'Bubinga':       { pairs:['EUR/USD','GBP/JPY','AUD/JPY','USD/TRY','BTC/USD'],          tfs:['30s','1m','2m','5m'] },
+      'Quotex':        { pairs:['EUR/USD','GBP/USD','USD/JPY','EUR/JPY','NZD/USD','BTC/USD'],tfs:['30s','1m','2m','5m','10m'] }
+    };
+
+    // --------- Elements ---------
+    const titleEl = document.getElementById('title');
+    const langEl  = document.getElementById('lang');
+    const brokerEl = document.getElementById('broker');
+    const pairEl   = document.getElementById('pair');
+    const tfEl     = document.getElementById('tf');
+    const indicatorEl = document.getElementById('indicator');
+    const startBtn = document.getElementById('start');
+    const againBtn = document.getElementById('again');
+    const outEl    = document.getElementById('out');
+
+    const lblBroker = document.getElementById('lbl-broker');
+    const lblPair   = document.getElementById('lbl-pair');
+    const lblTf     = document.getElementById('lbl-tf');
+    const lblInd    = document.getElementById('lbl-ind');
+
+    // Chart elements
+    const chartEl = document.getElementById('chart');
+    const c = document.getElementById('c');
+    const trendLabel = document.getElementById('trendLabel');
+    const ctx = c.getContext('2d');
+    let raf = null; // animation frame id
+
+    // Cache for sticky signals per (broker, pair, tf)
+    const SIGNAL_CACHE = new Map(); // key -> {side, ind, reason, ts, expiresAt}
+
+    let currentLang = 'en';
+    let lastCfg = null, lastSig = null;
+
+    // countdown
+    let countdownTimer = null;
+
+    // --------- Init ---------
+    function initBrokers(){
+      brokerEl.innerHTML='';
+      const names = Object.keys(BROKERS);
+      names.forEach((name,i)=>{ const opt=document.createElement('option'); opt.value=name; opt.textContent=name; if(i===0) opt.selected=true; brokerEl.appendChild(opt); });
+      if(!brokerEl.options.length){ const opt=document.createElement('option'); opt.value=''; opt.textContent='—'; brokerEl.appendChild(opt); }
+      fillByBroker();
+    }
+    function fillByBroker(){
+      let key = brokerEl.value; if(!BROKERS[key]){ key = Object.keys(BROKERS)[0]; brokerEl.value = key; }
+      const b = BROKERS[key]; if(!b) return;
+      pairEl.innerHTML=''; b.pairs.forEach((p,i)=>{ const opt=document.createElement('option'); opt.value=p; opt.textContent=`${p} (OTC)`; if(i===0) opt.selected=true; pairEl.appendChild(opt); });
+      tfEl.innerHTML=''; b.tfs.forEach((t,i)=>{ const opt=document.createElement('option'); opt.value=t; opt.textContent=t; if(i===0) opt.selected=true; tfEl.appendChild(opt); });
+      validateReady();
+      handleConfigChange();
+    }
+    function validateReady(){ const ok = brokerEl.value && pairEl.value && tfEl.value; startBtn.disabled = !ok; }
+    brokerEl.addEventListener('change', fillByBroker);
+    pairEl.addEventListener('change', handleConfigChange);
+    tfEl.addEventListener('change', handleConfigChange);
+
+    // --------- Localization ---------
+    function applyLang(lang){
+      currentLang = lang; const L = I18N[lang];
+      document.documentElement.lang = lang; document.documentElement.dir = L.dir || 'ltr';
+      titleEl.textContent = L.title; lblBroker.textContent = L.labels.broker; lblPair.textContent = L.labels.pair; lblTf.textContent = L.labels.tf; lblInd.textContent = L.labels.ind;
+      startBtn.textContent = L.buttons.start; againBtn.textContent = L.buttons.again; trendLabel.textContent = '—';
+      const curVal = indicatorEl.value || 'AUTO'; indicatorEl.innerHTML = '';
+      ;['AUTO','MACD','STOCH','RSI','WILL','BBAN'].forEach(k=>{ const opt=document.createElement('option'); opt.value=k; opt.textContent=L.indNames[k]; if(k===curVal) opt.selected=true; indicatorEl.appendChild(opt); });
+      if(lastCfg && lastSig) { renderResult(lastCfg, lastSig); if(lastSig.expiresAt && Date.now()<lastSig.expiresAt) startCountdownFor(lastCfg, lastSig); }
+    }
+    langEl.addEventListener('change', (e)=> applyLang(e.target.value));
+
+    // --------- Utilities ---------
+    const rnd  = (min,max)=> Math.random()*(max-min)+min;
+    const rndi = (min,max)=> Math.floor(rnd(min,max+1));
+    const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+    const biasSide = ()=> Math.random() < 0.5 ? 'BUY' : 'SELL';
+    const formatTime = d => d.toLocaleString((I18N[currentLang]||{}).locale||'en-US',{hour12:false});
+
+    function tfToMs(tf){
+      if(!tf) return 60000; // default 1m
+      const m = String(tf).match(/^(\d+)([sm])$/i);
+      if(!m) return 60000;
+      const val = parseInt(m[1],10); const unit = m[2].toLowerCase();
+      return unit==='s' ? val*1000 : val*60*1000;
+    }
+    const cacheKey = (cfg)=> `${cfg.broker}|${cfg.pairValue}|${cfg.tf}`;
+
+    function loadFromStorage(key){
+      try{ const raw = localStorage.getItem('sig:'+key); if(!raw) return null; const obj = JSON.parse(raw); if(obj && obj.expiresAt && Date.now() < obj.expiresAt) return obj; }catch{} return null;
+    }
+    function saveToStorage(key, val){ try{ localStorage.setItem('sig:'+key, JSON.stringify(val)); }catch{} }
+    function clearStorage(key){ try{ localStorage.removeItem('sig:'+key); }catch{} }
+
+    function justify(ind){
+      const P = I18N[currentLang].ph;
+      switch(ind){
+        case 'MACD':{
+          const macd = (rnd(-2.5,2.5)).toFixed(2);
+          const signal = (parseFloat(macd) + rnd(-0.6,0.6)).toFixed(2);
+          const cross = Math.random()<0.5 ? P.bull : P.bear;
+          const hl = Math.random()<0.5 ? P.high : P.low;
+          if(currentLang==='en') return `MACD ${cross} crossover (MACD≈${macd}, Signal≈${signal}), divergence at a ${hl}.`;
+          if(currentLang==='es') return `Cruce ${cross} de MACD (MACD≈${macd}, Señal≈${signal}), divergencia en ${hl}.`;
+          if(currentLang==='fr') return `Croisement ${cross} du MACD (MACD≈${macd}, Signal≈${signal}), divergence sur un ${hl}.`;
+          if(currentLang==='ar') return `MACD ${cross} (MACD≈${macd}، الإشارة≈${signal})، انحراف عند ${hl}.`;
+          return `MACD ${cross} пересечение (MACD≈${macd}, Signal≈${signal}), дивергенция на локальном ${hl}.`; }
+        case 'STOCH':{
+          const k = rndi(5,95);
+          const d = Math.min(100, Math.max(0, k + rndi(-8,8)));
+          const zone = k>80? P.sto.overb : k<20? P.sto.overs : P.sto.mid;
+          const extra = [P.sto.div,P.sto.cross,P.sto.exit][rndi(0,2)];
+          if(currentLang==='en') return `Stochastic %K≈${k}, %D≈${d}, ${zone} zone, ${extra}.`;
+          if(currentLang==='es') return `Estocástico %K≈${k}, %D≈${d}, zona de ${zone}, ${extra}.`;
+          if(currentLang==='fr') return `Stochastique %K≈${k}, %D≈${d}, zone de ${zone}, ${extra}.`;
+          if(currentLang==='ar') return `ستوكاستيك %K≈${k}، %D≈${d}، منطقة ${zone}، ${extra}.`;
+          return `Stochastic %K≈${k}, %D≈${d}, зона ${zone}, наблюдается ${extra}.`; }
+        case 'RSI':{
+          const v = rndi(5,95);
+          const zone = v>70? P.rsi.overb : v<30? P.rsi.overs : P.rsi.bal;
+          const extra = [P.rsi.r50,P.rsi.hdiv,P.rsi.brk][rndi(0,2)];
+          if(currentLang==='en') return `RSI≈${v} (${zone}), ${extra}.`;
+          if(currentLang==='es') return `RSI≈${v} (${zone}), ${extra}.`;
+          if(currentLang==='fr') return `RSI≈${v} (${zone}), ${extra}.`;
+          if(currentLang==='ar') return `RSI≈${v} (${zone})، ${extra}.`;
+          return `RSI≈${v} (${zone}), ${extra}.`; }
+        case 'WILL':{
+          const v = rndi(-100,-1);
+          const zone = v>-20? P.will.overb : v<-80? P.will.overs : P.will.neutral;
+          const extra = [P.will.exit,P.will.post,P.will.ret][rndi(0,2)];
+          if(currentLang==='en') return `Williams %R≈${v} (${zone}), ${extra}.`;
+          if(currentLang==='es') return `Williams %R≈${v} (${zone}), ${extra}.`;
+          if(currentLang==='fr') return `Williams %R≈${v} (${zone}), ${extra}.`;
+          if(currentLang==='ar') return `Williams %R≈${v} (${zone})، ${extra}.`;
+          return `Williams %R≈${v} (${zone}), ${extra}.`; }
+        case 'BBAN':{
+          const pos = [P.bban.upper,P.bban.middle,P.bban.lower][rndi(0,2)];
+          const width = (rnd(1.2,3.5)).toFixed(1);
+          const extra = [P.bban.squeeze,P.bban.bounce,P.bban.break][rndi(0,2)];
+          if(currentLang==='en') return `Bollinger Bands: price near ${pos} band, width≈${width}σ, ${extra}.`;
+          if(currentLang==='es') return `Bandas de Bollinger: precio en la banda ${pos}, ancho≈${width}σ, ${extra}.`;
+          if(currentLang==='fr') return `Bandes de Bollinger : prix près de la bande ${pos}, largeur≈${width}σ, ${extra}.`;
+          if(currentLang==='ar') return `بولنجر باندز: السعر عند ${pos}، العرض≈${width}σ، ${extra}.`;
+          return `Bollinger Bands: цена у ${pos} полосы, ширина полос≈${width}σ, ${extra}.`; }
+        default:
+          return '';
+      }
+    }
+
+    function getOrCreateSignal(cfg){
+      const key = cacheKey(cfg);
+      // in-memory first
+      let s = SIGNAL_CACHE.get(key);
+      if(!s){ s = loadFromStorage(key); if(s) SIGNAL_CACHE.set(key, s); }
+      if(s && Date.now() < s.expiresAt){ return s; }
+      // create new
+      let ind = indicatorEl.value || 'AUTO';
+      if(ind==='AUTO') ind = pick(['MACD','STOCH','RSI','WILL','BBAN']);
+      const side = biasSide();
+      const reason = justify(ind);
+      const d = new Date();
+      const exp = Date.now() + tfToMs(cfg.tf);
+      const sig = { side, ind, reason, ts: formatTime(d), expiresAt: exp };
+      SIGNAL_CACHE.set(key, sig); saveToStorage(key, sig);
+      return sig;
+    }
+
+    function renderResult(cfg, sig){
+      const L=I18N[currentLang]; const {broker,pairLabel,tf}=cfg; const badgeClass=sig.side==='BUY'?'buy':'sell'; const title=sig.side==='BUY'?L.result.buy:L.result.sell;
+      outEl.innerHTML = `
+        <div class="result">
+          <div class="row" style="justify-content:space-between; align-items:center">
+            <div class="badge ${badgeClass}">${title}</div>
+            <div class="meta"><span>${sig.ts}</span> • <span id="countdown">${L.result.nextIn} …</span></div>
+          </div>
+          <div class="just">
+            <strong>${broker}</strong> • <strong>${pairLabel}</strong> • ${L.labels.tf}: <strong>${tf}</strong><br/>
+            ${L.result.indicator}: <strong>${L.indNames[sig.ind]||sig.ind}</strong><br/>
+            ${L.result.reason}: ${sig.reason}
+          </div>
+        </div>`;
+    }
+
+    function currentConfig(){
+      return {
+        broker: brokerEl.value,
+        pairValue: pairEl.value,
+        pairLabel: pairEl.options[pairEl.selectedIndex]?.text || pairEl.value + ' (OTC)',
+        tf: tfEl.value
+      };
+    }
+
+    function setButtonsLocked(locked){
+      if(locked){
+        startBtn.disabled = true; againBtn.disabled = true;
+      } else {
+        const ok = brokerEl.value && pairEl.value && tfEl.value;
+        startBtn.disabled = !ok;
+        againBtn.disabled = !lastSig;
+      }
+    }
+
+    function formatDuration(ms){
+      let s = Math.max(0, Math.ceil(ms/1000));
+      const h = Math.floor(s/3600); s %= 3600; const m = Math.floor(s/60); const ss = s%60;
+      return (h? String(h).padStart(2,'0')+':':'') + String(m).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+    }
+
+    function stopCountdown(){ if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; } }
+
+    function startCountdownFor(cfg, sig){
+      stopCountdown();
+      const L = I18N[currentLang];
+      const key = cacheKey(cfg);
+      function tick(){
+        const el = document.getElementById('countdown');
+        if(!el){ stopCountdown(); return; }
+        const rem = sig.expiresAt - Date.now();
+        if(rem <= 0){
+          el.textContent = L.result.ready;
+          // unlock actions; signal considered expired
+          setButtonsLocked(false);
+          SIGNAL_CACHE.delete(key); clearStorage(key);
+          stopCountdown();
+          return;
+        }
+        el.textContent = `${L.result.nextIn} ${formatDuration(rem)}`;
+      }
+      countdownTimer = setInterval(tick, 1000);
+      tick();
+    }
+
+    // --------- Candle chart (BUY/SELL animation) ---------
+    const rndF  = (min,max)=> Math.random()*(max-min)+min;
+    function resizeCanvas(){
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const rect = chartEl.getBoundingClientRect();
+      c.width = Math.floor(rect.width * dpr);
+      c.height = Math.floor(rect.height * dpr);
+      c.style.width = rect.width + 'px';
+      c.style.height = rect.height + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      drawGrid();
+    }
+    function drawGrid(){
+      const {width, height} = c; const dpr = Math.max(1, window.devicePixelRatio || 1);
+      ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,width,height); ctx.setTransform(dpr,0,0,dpr,0,0);
+      const w = width/dpr, h = height/dpr; ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1; const stepY = 28;
+      for(let y=0; y<h; y+=stepY){ ctx.beginPath(); ctx.moveTo(0,y+.5); ctx.lineTo(w,y+.5); ctx.stroke(); }
+      ctx.restore();
+    }
+    function genCandles(n=60, side='BUY'){
+      const data = []; let price = rndF(90,110); const drift = side==='BUY' ? rndF(0.05,0.25) : -rndF(0.05,0.25);
+      for(let i=0;i<n;i++){ const vol = rndF(0.5,2.4); const open = price; const delta = drift + rndF(-0.6,0.6); const close = Math.max(10, open + delta); const high = Math.max(open, close) + rndF(0.2,1.4)*vol; const low  = Math.min(open, close) - rndF(0.2,1.4)*vol; price = close; data.push({open,high,low,close}); }
+      return data;
+    }
+    function animateCandles(side){
+      cancelAnimationFrame(raf); resizeCanvas();
+      const upColor = '#7ef2b3', downColor = '#ff9ea1', outlineUp = '#1d5e41', outlineDown = '#6e2326';
+      const data = genCandles(64, side); const w = c.clientWidth, h = c.clientHeight; const pad = 14; const visible = 40; const cw = Math.max(6, Math.floor((w - pad*2) / visible)); const gap = 2;
+      const prices = data.flatMap(d=>[d.high,d.low]); const minP = Math.min(...prices), maxP = Math.max(...prices); const px = p => pad + (p - minP) / (maxP - minP + 1e-6) * (h - pad*2);
+      let i = 0; trendLabel.textContent = side==='BUY' ? 'BUY' : 'SELL';
+      function frame(){ drawGrid(); const start = Math.max(0, i - visible + 1); const slice = data.slice(start, i+1);
+        slice.forEach((d, idx)=>{ const x = pad + idx*(cw+gap); const openY = h - px(d.open); const closeY= h - px(d.close); const highY = h - px(d.high); const lowY  = h - px(d.low); const isUp = d.close >= d.open; const col = isUp ? upColor : downColor; const ol  = isUp ? outlineUp : outlineDown; ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + cw/2, highY); ctx.lineTo(x + cw/2, lowY); ctx.stroke(); const bodyY = Math.min(openY, closeY); const bodyH = Math.max(2, Math.abs(closeY - openY)); ctx.fillStyle = col; ctx.strokeStyle = ol; ctx.lineWidth = 1; roundRect(ctx, x+0.5, bodyY, cw-1, bodyH, 3, true, true); });
+        const arrowX = w - 34, arrowY = 22; ctx.fillStyle = side==='BUY' ? upColor : downColor; ctx.strokeStyle = 'rgba(255,255,255,.15)'; ctx.lineWidth=1; ctx.beginPath(); if(side==='BUY'){ ctx.moveTo(arrowX, arrowY+12); ctx.lineTo(arrowX+10, arrowY+2); ctx.lineTo(arrowX+20, arrowY+12); } else { ctx.moveTo(arrowX, arrowY+2); ctx.lineTo(arrowX+10, arrowY+12); ctx.lineTo(arrowX+20, arrowY+2);} ctx.closePath(); ctx.fill(); ctx.stroke(); i++; if(i < data.length-1){ raf = requestAnimationFrame(frame); } }
+      raf = requestAnimationFrame(frame);
+    }
+    function roundRect(ctx, x, y, w, h, r, fill, stroke){ const radius = Math.min(r, w/2, h/2); ctx.beginPath(); ctx.moveTo(x+radius, y); ctx.arcTo(x+w, y, x+w, y+h, radius); ctx.arcTo(x+w, y+h, x, y+h, radius); ctx.arcTo(x, y+h, x, y, radius); ctx.arcTo(x, y, x+w, y, radius); if(fill) ctx.fill(); if(stroke) ctx.stroke(); }
+
+    // --------- Buttons & interactions ---------
+    function currentConfig(){
+      return {
+        broker: brokerEl.value,
+        pairValue: pairEl.value,
+        pairLabel: pairEl.options[pairEl.selectedIndex]?.text || pairEl.value + ' (OTC)',
+        tf: tfEl.value
+      };
+    }
+
+    startBtn.addEventListener('click', ()=>{
+      lastCfg = currentConfig();
+      lastSig = getOrCreateSignal(lastCfg);
+      renderResult(lastCfg, lastSig);
+      setButtonsLocked(true);
+      outEl.scrollIntoView({behavior:'smooth', block:'start'});
+      animateCandles(lastSig.side);
+      startCountdownFor(lastCfg, lastSig);
+    });
+
+    againBtn.addEventListener('click', ()=>{
+      // Same behavior as Start, but kept for UI parity
+      lastCfg = currentConfig();
+      lastSig = getOrCreateSignal(lastCfg);
+      renderResult(lastCfg, lastSig);
+      setButtonsLocked(true);
+      outEl.scrollIntoView({behavior:'smooth', block:'start'});
+      animateCandles(lastSig.side);
+      startCountdownFor(lastCfg, lastSig);
+    });
+
+    function handleConfigChange(){
+      const cfg = currentConfig();
+      const key = cacheKey(cfg);
+      let s = SIGNAL_CACHE.get(key) || loadFromStorage(key);
+      if(s && Date.now() < s.expiresAt){
+        lastCfg = cfg; lastSig = s;
+        renderResult(cfg, s);
+        setButtonsLocked(true);
+        animateCandles(s.side);
+        startCountdownFor(cfg, s);
+      } else {
+        // unlock for new generation on this config
+        lastCfg = cfg; lastSig = null; stopCountdown(); trendLabel.textContent='—';
+        setButtonsLocked(false);
+        outEl.innerHTML = '';
+      }
+    }
+
+    // --------- Safe init ---------
+    function safeInit(){
+      try{
+        if(!brokerEl.options.length) initBrokers();
+        langEl.value = 'en';
+        if(!indicatorEl.options.length) applyLang('en');
+        if(!pairEl.options.length || !tfEl.options.length) fillByBroker();
+        validateReady();
+        resizeCanvas();
+        handleConfigChange();
+      }catch(e){ console.error('init error', e); }
+    }
+    if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', safeInit, {once:true}); } else { safeInit(); }
+    window.addEventListener('resize', ()=>{ resizeCanvas(); if(lastSig) animateCandles(lastSig.side); }, {passive:true});
+    ['focus','mousedown','touchstart'].forEach(ev=>{ brokerEl.addEventListener(ev, ()=>{ if(!brokerEl.options.length) safeInit(); }); indicatorEl.addEventListener(ev, ()=>{ if(!indicatorEl.options.length) applyLang(currentLang||'en'); }); });
+
+  </script>
+</body>
+</html>
